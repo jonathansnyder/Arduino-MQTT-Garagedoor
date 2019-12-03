@@ -1,0 +1,126 @@
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <PubSubClient.h>
+
+
+int TRIGGER_PIN = 13;
+int ECHO_PIN = 12;
+long SIGNALTIME = 0;
+
+char magState = 'u';
+
+const char* ssid = "";
+const char* password = "";
+
+const char* MqttServer = "";
+const int MqttPort = 1883; //default port for MQTT is used
+
+WiFiClient wificlient;
+PubSubClient client(wificlient);
+
+unsigned long distance_CM = 0;
+unsigned long distance_IN = 0;
+//IPAddress server();
+void setup() {
+  // put your setup code here, to run once:
+  //connect to wifi
+Serial.begin(115200);
+
+pinMode(TRIGGER_PIN, OUTPUT);
+pinMode(ECHO_PIN, INPUT);
+  Serial.println();
+  Serial.println();
+  Serial.print(F("Connecting to "));
+  Serial.println(ssid);
+    WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(F("."));
+  }
+  Serial.println();
+  Serial.println(F("WiFi connected"));
+//code from https://arduinodiy.wordpress.com/2017/11/24/mqtt-for-beginners/
+  client.setServer(MqttServer, MqttPort);
+  client.setCallback(callback);
+  if(client.connect("SonicSensor")){
+    Serial.println("SonicSensor connected");
+  }
+  else{
+    Serial.print("Failed");
+    Serial.print(client.state());
+    delay(1000);
+  }
+  client.subscribe("magnet/state");
+}
+
+void callback(char* topic, byte* payload, unsigned int length){
+  for(int i = 0; i < length; i++){
+    Serial.print((char)payload[i]);
+    magState = payload[i];
+  }
+  //magState = payload[0];
+  Serial.println("magstate change");
+}
+
+//if client.connect("Name");
+void loop() {
+
+//HTTPClient http;
+client.loop();
+
+  // put your main code here, to run repeatedly:
+//if (client.connect(server, 80)){
+  //Serial.println("Client connected");
+//}
+if(magState == 'O'){
+
+  digitalWrite(TRIGGER_PIN, LOW);
+  delayMicroseconds(5);
+  digitalWrite(TRIGGER_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIGGER_PIN, LOW);
+  
+  SIGNALTIME = pulseIn(ECHO_PIN, HIGH);
+  
+  //get the current distance
+  distance_CM = (SIGNALTIME/2) / 29.1; 
+  //code to debug sensor distances
+  Serial.print(distance_CM);
+  //start of led stoplight logic
+  if(distance_CM <= 10){
+  //http.begin("192.168.1.4/Blink");
+  //http.GET();
+  //client.println("GET /Blink");
+  client.publish("stoplight/color","b");
+  }
+  if(distance_CM >= 11 && distance_CM < 20){
+    //send red get request
+    //http.begin("192.168.1.4/Green");
+    //http.GET();
+    //client.println("GET /Red");
+    client.publish("stoplight/color","r");
+  }
+  if(distance_CM >= 21 && distance_CM < 30){
+   //send yellow get request
+   //client.println("GET /Yellow");
+   //http.begin("192.168.1.4/Yellow");
+   //http.GET();
+   client.publish("stoplight/color","y");
+  }
+  if(distance_CM > 30){
+  //send green get request
+  //http.begin("192.168.1.4/Red");
+  //http.GET();
+  //client.println("GET /Green");
+  client.publish("stoplight/color","g");
+  }
+  
+  delay(100);
+}
+else{
+  client.publish("stoplight/color","q");
+delay(100);
+}
+}

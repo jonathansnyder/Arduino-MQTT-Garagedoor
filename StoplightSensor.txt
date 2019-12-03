@@ -1,0 +1,238 @@
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+
+const char* ssid = "";
+const char* password = "";
+
+int green = D5;
+int yellow = D6;
+int red = D7;
+
+WiFiServer server(80);
+
+unsigned long lastMillis;
+unsigned long greenAndRedTimer = 5000;
+unsigned long yellowTimer = 3000;
+unsigned long currenttime = 0;
+unsigned long blinker = 1000;
+int redstate = LOW;
+//autostate green = 1, yellow = 2, red = 3
+int autostate = 0;
+bool automode = false;
+bool blinkmode = false;
+
+char colorstate = 'u';
+const char* MqttServer = "";
+const int MqttPort = 1883;
+
+WiFiClient wificlient;
+PubSubClient client(wificlient);
+void setup() {
+  // put your setup code here, to run once:
+  // Sever code is from the tutorial found here: http://www.esp8266learning.com/wemos-webserver-example.php
+
+  pinMode(green, OUTPUT);
+  pinMode(yellow, OUTPUT);
+  pinMode(red, OUTPUT);
+
+  //setup
+  Serial.begin(115200);
+  // Connect to WiFi network
+  Serial.println();
+  Serial.println();
+  Serial.print(F("Connecting to "));
+  Serial.println(ssid);
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(F("."));
+  }
+  Serial.println();
+  Serial.println(F("WiFi connected"));
+
+  // Start the server
+  //server.begin();
+  //Serial.println(F("Server started"));
+
+  // Print the IP address
+  Serial.println(WiFi.localIP());
+
+  //code from https://arduinodiy.wordpress.com/2017/11/24/mqtt-for-beginners/
+  client.setServer(MqttServer, MqttPort);
+  client.setCallback(callback);
+  if(client.connect("Stoplight")){
+    Serial.println("Stoplight connected");
+  }
+  else{
+    Serial.print("Failed");
+    Serial.print(client.state());
+    delay(1000);
+  }
+  client.subscribe("stoplight/color");
+  lastMillis = millis();
+  
+}
+
+void callback(char* topic, byte* payload, unsigned int length){
+  colorstate = payload[0];
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+client.loop();
+  //WiFiClient client = server.available();
+  //if (client){
+    //while (!client.available()){
+      //delay(10);
+    //}
+  //}
+
+  //client.setTimeout(100);
+
+  //String request = client.readStringUntil('\r');
+  //client.flush();
+
+  //Serial.println("start of if block");
+  //turns on green led
+  if (colorstate == 'g') {
+    autostate = 0;
+    automode = false;
+    blinkmode = false;
+    greenled();
+  }
+  //turns led yellow
+  if (colorstate == 'y') {
+    autostate = 0;
+    automode = false;
+    blinkmode = false;
+    yellowled();
+  }
+  //turns on led exits cycle
+  if (colorstate == 'r') {
+    autostate = 0;
+    automode = false;
+    blinkmode = false;
+    redled();
+  }
+  //turns off leds exits cycle
+  if (colorstate == 'q') {
+    autostate = 0;
+    automode = false;
+    blinkmode = false;
+    offled();
+  }
+  //starts the autocycle of stoplight
+  if (colorstate == 'a') {
+    blinkmode = false;
+    autocycle();
+    //Serial.println("in the auto button zone");
+  }
+  //blinking indicator light
+  if (colorstate == 'b') {
+    blinky();
+  }
+  currenttime = millis();
+  //Serial.println();
+  //Serial.println("automode value");
+  //Serial.print(automode);
+  //Serial.println();
+  if (blinkmode){
+    
+    if(currenttime - lastMillis >= blinker){
+      lastMillis = currenttime;
+      if(redstate == LOW){
+        redstate = HIGH;
+        Serial.println("blinkToggle");
+      }
+      else{
+        redstate =LOW;
+      }
+      digitalWrite(red, redstate);
+      Serial.println("statechange");
+    }
+   
+  }
+  if (automode) {
+    //debuging serial var print
+    Serial.println("automode on");
+    if (autostate == 1) {
+      //debuging serial print
+      Serial.println("auto1");
+      if (currenttime - lastMillis >= greenAndRedTimer) {
+        yellowled();
+        autostate = 2;
+        lastMillis = currenttime;
+      }
+    }
+    if (autostate == 2) {
+      //debuging serial print
+      Serial.println("auto2");
+      //Serial.print("current");
+      //Serial.print(currenttime);
+      //Serial.println();
+      //Serial.println("last");
+      //Serial.print(lastMillis);
+      currenttime = millis();
+      if (currenttime - lastMillis >= yellowTimer) {
+        redled();
+        autostate = 3;
+        lastMillis = currenttime;
+      }
+    }
+    if (autostate == 3) {
+      //debuging serial print
+      Serial.println("auto3");
+      currenttime = millis();
+      if (currenttime - lastMillis >= greenAndRedTimer) {
+        greenled();
+        autostate = 1;
+        lastMillis = currenttime;
+      }
+    }
+  }
+  
+}
+//changes led to green
+void greenled() {
+  digitalWrite(green, HIGH);
+  digitalWrite(yellow, LOW);
+  digitalWrite(red, LOW);
+}
+//changes led to red
+void redled() {
+  digitalWrite(green, LOW);
+  digitalWrite(yellow, LOW);
+  digitalWrite(red, HIGH);
+}
+//changes led to yellow
+void yellowled() {
+  digitalWrite(green, LOW);
+  digitalWrite(yellow, HIGH);
+  digitalWrite(red, LOW);
+}
+//turns off the led
+void offled() {
+  digitalWrite(green, LOW);
+  digitalWrite(yellow, LOW);
+  digitalWrite(red, LOW);
+}
+//starts the autocycling of the stoplight
+void autocycle() {
+  Serial.println("autocycle function");
+  greenled();
+  autostate = 1;
+  automode = true;
+}
+void blinky() {
+  
+  blinkmode = true;
+   currenttime = millis();
+      if (currenttime - lastMillis >= yellowTimer) {
+        redled();
+        lastMillis = currenttime;
+      }
+  
+}

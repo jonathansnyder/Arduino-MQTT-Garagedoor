@@ -1,0 +1,58 @@
+#include <WiFiClient.h>
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+
+const char* ssid = "";
+const char* password = "";
+
+const char* MqttServer = "";
+const int MqttPort = 1883;
+
+int reedstate = 0;
+
+int CONTROL_PIN = 12;
+WiFiClient wificlient;
+PubSubClient client(wificlient);
+
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(115200);
+  
+  pinMode(CONTROL_PIN,INPUT_PULLUP);
+  
+  Serial.println();
+  Serial.println();
+  Serial.print(F("Connecting to "));
+  Serial.println(ssid);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(F("."));
+  }
+  Serial.println();
+  Serial.println(F("WiFi connected"));
+
+  //code from https://arduinodiy.wordpress.com/2017/11/24/mqtt-for-beginners/
+  client.setServer(MqttServer, MqttPort);
+  
+  if(client.connect("MagSensor")){
+    Serial.println("MagSensor connected");
+  }
+  else{
+    Serial.print("Failed");
+    Serial.print(client.state());
+    delay(1000);
+  }
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+  if(reedstate == 0){
+  client.publish("magnet/state","O");//open
+  }
+  if(reedstate == 1){
+  client.publish("magnet/state","C");//closed
+  }
+}
